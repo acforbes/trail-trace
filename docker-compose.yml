@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: my-project-backend:local
+    ports:
+      - "8080:8080"
+    environment:
+      - ENVIRONMENT=development
+      - ALLOWED_ORIGINS=http://localhost:5173
+    volumes:
+      - ./backend/app:/code/app  # Live reload backend changes
+    restart: unless-stopped
+
+  frontend:
+    image: node:20-slim        # Uses a standard, official Node image
+    working_dir: /app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    volumes:
+      - ./frontend:/app        # Mounts your local React code into the container
+    command: sh -c "npm install && npm run dev -- --host"  # Installs deps and runs Vite
+    depends_on:
+      - backend
+    restart: unless-stopped

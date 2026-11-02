@@ -1,0 +1,20 @@
+# --- VS Code & Workspace ---
+.vscode/
+*.code-workspace
+
+# --- Backend / Python ---
+backend/venv/
+backend/.venv/
+backend/.env
+**/__pycache__/
+*.pyc
+
+# --- Frontend / Node ---
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env
+
+# --- OS Overhead ---
+.DS_Store
+Thumbs.db
