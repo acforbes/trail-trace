@@ -7,21 +7,46 @@ Vite, and Leaflet frontend.
 
 Install the Python dependencies and start the API:
 
-```powershell
-python -m pip install -r requirements.txt
-python -m uvicorn backend.main:app --reload --port 8000
-```
+## Backend Setup (FastAPI)
 
-In another terminal, install the frontend dependencies and start Vite:
+1. **Navigate to the backend directory:**
+   ```powershell
+   Set-Location backend
+   ```
 
-```powershell
-Set-Location frontend
-npm install
-npm run dev
-```
+2. **Install the dependencies:**
+   ```powershell
+   python -m pip install -r requirements.txt
+   ```
 
-Open the Vite URL shown in the terminal. The development server proxies API
-requests to `http://localhost:8000`.
+3. **Start the FastAPI server:**
+   Run uvicorn using the `app.main:app` module structure:
+   ```powershell
+   python -m uvicorn app.main:app --reload --port 8080
+   ```
+   The backend will be accessible locally at `http://127.0.0.1:8080`.
+
+---
+
+## Frontend Setup (Vite)
+
+Open a **separate terminal window** to run the frontend application.
+
+1. **Navigate to the frontend directory:**
+   ```powershell
+   Set-Location frontend
+   ```
+
+2. **Install the dependencies:**
+   ```powershell
+   npm install
+   ```
+
+3. **Start the Vite development server:**
+   ```powershell
+   npm run dev
+   ```
+  The frontend will be accessible locally at `http://localhost:5173`.
 
 ## API
 
@@ -46,9 +71,25 @@ are measured from the fitted route.
 Build and run the combined production frontend and API:
 
 ```powershell
+Set-Location backend
 docker build -t trail-trace .
-docker run --rm -p 8000:8000 trail-trace
+docker run -p 8080:8080 -e port=8080 trail-trace
 ```
 
+## Deploy to Google Cloud Run
+The fastest way to deploy without manually pushing to an Artifact Registry is using Google Cloud's source deployment feature, which uses Cloud Build under the hood.
+
+```powershell
+# Ensure you are in the backend directory
+Set-Location backend
+
+# Deploy directly from local source code
+gcloud run deploy backend-service `
+  --source . `
+  --region us-central1 `
+  --allow-unauthenticated
+```
+
+## User Experience
 The React map keeps its Leaflet instance mounted while lap visibility changes,
 so changing checkboxes updates route layers without resetting the viewport.
