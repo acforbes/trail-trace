@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: my-project-backend:local
+    image: trail-trace-backend:local
     ports:
       - "8080:8080"
     environment:

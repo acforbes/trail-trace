@@ -8,7 +8,7 @@ on:
 
 env:
   PROJECT_ID: trail-trace-513701
-  PROJECT_NUMBER: 776453419964
+  PROJECT_NUMBER: "776453419964"
   GAR_LOCATION: us-central1
   GAR_REPO: registry-trail-trace
   GAR_SA: github-actions-sa
