@@ -65,7 +65,7 @@ type StartLocation = {
 
 const PATTERN_COLORS: Record<string, string> = {
   "Extended Kalman Filtering (EKF)": "#d94f4f",
-  "Smoothing Splines": "#e58b2f",
+  // "Smoothing Splines": "#e58b2f",
   "Bézier Curves": "#d4ae22",
 };
 

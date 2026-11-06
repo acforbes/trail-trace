@@ -12,9 +12,12 @@ backend/.env
 # --- Frontend / Node ---
 frontend/node_modules/
 frontend/dist/
+frontend/.agents
 frontend/.env.local
 frontend/.env
 
 # --- OS Overhead ---
 .DS_Store
 Thumbs.db
+
+*.log

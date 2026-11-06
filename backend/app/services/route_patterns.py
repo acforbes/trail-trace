@@ -4,13 +4,13 @@ import math
 from dataclasses import dataclass
 from typing import Callable
 
-from scipy.interpolate import splprep, splev
+#from scipy.interpolate import splprep, splev
 
 EARTH_RADIUS_METERS = 6_371_000.0
 METERS_PER_MILE = 1609.344
 SAMPLE_COUNT = 96
 EKF_POSITION_NOISE_METERS = 3.0
-SPLINE_POSITION_NOISE_METERS = 4.0
+#SPLINE_POSITION_NOISE_METERS = 4.0
 
 Point = tuple[float, float]
 GeographicPoint = tuple[float, float]
@@ -173,19 +173,19 @@ def _fit_extended_kalman_filter(route: list[Point]) -> list[Point]:
     return filtered
 
 
-def _fit_smoothing_spline(route: list[Point]) -> list[Point]:
-    x_values, y_values = zip(*route)
-    spline, _ = splprep(
-        [x_values, y_values],
-        s=len(route) * SPLINE_POSITION_NOISE_METERS**2,
-        k=3,
-        per=True,
-    )
-    smoothed_x, smoothed_y = splev(
-        [index / (SAMPLE_COUNT - 1) for index in range(SAMPLE_COUNT)],
-        spline,
-    )
-    return list(zip(smoothed_x, smoothed_y))
+# def _fit_smoothing_spline(route: list[Point]) -> list[Point]:
+#     x_values, y_values = zip(*route)
+#     spline, _ = splprep(
+#         [x_values, y_values],
+#         s=len(route) * SPLINE_POSITION_NOISE_METERS**2,
+#         k=3,
+#         per=True,
+#     )
+#     smoothed_x, smoothed_y = splev(
+#         [index / (SAMPLE_COUNT - 1) for index in range(SAMPLE_COUNT)],
+#         spline,
+#     )
+#     return list(zip(smoothed_x, smoothed_y))
 
 
 def _fit_bezier_curve(route: list[Point]) -> list[Point]:
@@ -361,13 +361,13 @@ def fit_route_patterns(
             reference_latitude,
             _fit_extended_kalman_filter,
         ),
-        _build_fit(
-            "Smoothing Splines",
-            valid_routes,
-            origin,
-            reference_latitude,
-            _fit_smoothing_spline,
-        ),
+        # _build_fit(
+        #     "Smoothing Splines",
+        #     valid_routes,
+        #     origin,
+        #     reference_latitude,
+        #     _fit_smoothing_spline,
+        # ),
         _build_fit(
             "Bézier Curves",
             valid_routes,
