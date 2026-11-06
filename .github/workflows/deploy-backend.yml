@@ -13,7 +13,7 @@ env:
   GAR_REPO: registry-trail-trace
   GAR_SA: github-actions-sa
   GAR_POOL: github-pool
-  GAR_PROVIDER: github-provider
+  GAR_PROVIDER: github-provider-trail-trace
   IMAGE_NAME: backend-trail-trace
   SERVICE_NAME: trail-trace-service
 

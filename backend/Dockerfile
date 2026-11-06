@@ -30,6 +30,6 @@ EXPOSE 8080
 
 #CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 # Use exec form to bind to Cloud Run's dynamic port
-CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
 #Production Alternative: Gunicorn with Uvicorn Workers
 #CMD ["sh", "-c", "exec gunicorn --bind :${PORT:-8080} --workers 1 --threads 8 --timeout 0 -k uvicorn.workers.UvicornWorker main:app"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
