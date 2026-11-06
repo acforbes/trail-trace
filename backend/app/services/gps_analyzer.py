@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Measure laps whenever a GPS track returns to its starting location."""
 
+# These are for command line only (pre-API endpoint)
 # python C:\forbesoft\micro-apps\trail-trace\core\gps_analyzer.py activity.gpx
 # python C:\forbesoft\micro-apps\trail-trace\core\gps_analyzer.py activity.tcx --radius-meters 30 --output laps.csv
 # python C:\forbesoft\micro-apps\trail-trace\core\gps_analyzer.py activity.gpx --start-time 2024-01-01T08:00:00Z
