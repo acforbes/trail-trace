@@ -45,3 +45,4 @@ jobs:
 
     - name: Deploy to Firebase Hosting
       run: npx firebase-tools deploy --only hosting --token "${{ secrets.FIREBASE_CLI_TOKEN }}"
+      working-directory: ./frontend
