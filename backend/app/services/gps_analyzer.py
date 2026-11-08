@@ -18,14 +18,17 @@ from typing import Iterable
 
 EARTH_RADIUS_METERS = 6_371_000
 METERS_PER_MILE = 1609.344
+FEET_PER_METER = 3.28084
 DEFAULT_RADIUS_METERS = 20.0
-
+ELEVATION_TOLERANCE_METERS = 3.0
+NUMBER_OF_POINTS_ERROR_THRESHOLD = 5 # percentage of total points beyond tolerance
 
 @dataclass(frozen=True)
 class TrackPoint:
     latitude: float
     longitude: float
     timestamp: datetime
+    elevation: float | None
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,8 @@ class Lap:
     number: int
     distance_miles: float
     total_distance_miles: float
+    elevation_gain: float
+    total_elevation_gain: float
     elapsed_seconds: float
     total_seconds: float
     pace_minutes_per_mile: float | None
@@ -49,29 +54,31 @@ def _child_text(element: ET.Element, name: str) -> str | None:
     return None
 
 
-def _parse_point(latitude: str, longitude: str, timestamp: str | None) -> TrackPoint:
+def _parse_point(latitude: str, longitude: str, timestamp: str | None, elevation: str | None) -> TrackPoint:
     if timestamp is None:
         raise ValueError("Every track point must have a timestamp.")
     try:
         lat = float(latitude)
         lon = float(longitude)
         time = datetime.fromisoformat(timestamp.strip().replace("Z", "+00:00"))
+        ele = float(elevation) if elevation is not None else None
     except ValueError as exc:
         raise ValueError(f"Invalid track point: {exc}") from exc
     if not math.isfinite(lat) or not -90 <= lat <= 90:
         raise ValueError(f"Latitude out of range: {latitude}")
     if not math.isfinite(lon) or not -180 <= lon <= 180:
         raise ValueError(f"Longitude out of range: {longitude}")
-    return TrackPoint(lat, lon, time)
+    return TrackPoint(lat, lon, time, ele)
 
 
 def _parse_gpx_point(element: ET.Element, timestamp: str) -> TrackPoint:
     latitude = element.get("lat")
     longitude = element.get("lon")
+    elevation = _child_text(element, "ele")
     if latitude is None or longitude is None:
         print(f"GPX: Missing Latitude/Longitude {element}")
         raise ValueError("A GPX track point is missing latitude or longitude.")
-    return _parse_point(latitude, longitude, timestamp)
+    return _parse_point(latitude, longitude, timestamp, elevation)
 
 
 def _parse_tcx_point(element: ET.Element, timestamp: str) -> TrackPoint | None:
@@ -84,10 +91,11 @@ def _parse_tcx_point(element: ET.Element, timestamp: str) -> TrackPoint | None:
         return None
     latitude = _child_text(position, "LatitudeDegrees")
     longitude = _child_text(position, "LongitudeDegrees")
+    elevation = _child_text(element, "AltitudeMeters")
     if latitude is None or longitude is None:
         print(f"TCX: Missing Latitude/Longitude {element}")
         raise ValueError("A TCX track point is missing latitude or longitude.")
-    return _parse_point(latitude, longitude, timestamp)
+    return _parse_point(latitude, longitude, timestamp, elevation)
 
 
 def load_track(path: Path, start_time: datetime | None = None) -> list[TrackPoint]:
@@ -150,7 +158,6 @@ def load_track(path: Path, start_time: datetime | None = None) -> list[TrackPoin
         raise ValueError(f"No track points found in {path}.")
     return points
 
-
 def distance_meters(first: TrackPoint, second: TrackPoint) -> float:
     """Return the great-circle distance between two GPS points."""
     lat1, lat2 = math.radians(first.latitude), math.radians(second.latitude)
@@ -162,6 +169,11 @@ def distance_meters(first: TrackPoint, second: TrackPoint) -> float:
     )
     return 2 * EARTH_RADIUS_METERS * math.asin(math.sqrt(min(1.0, haversine)))
 
+def elevation_meters(first: TrackPoint, second: TrackPoint) -> float:
+    """Return the elevation difference between two GPS points."""
+    if first.elevation is None or second.elevation is None:
+        raise ValueError("Elevation data is missing for one or both points.")
+    return second.elevation - first.elevation
 
 def measure_laps(
     points: Iterable[TrackPoint],
@@ -202,10 +214,11 @@ def measure_laps_with_routes(
             raise ValueError(f"Latitude out of range: {latitude}")
         if not math.isfinite(longitude) or not -180 <= longitude <= 180:
             raise ValueError(f"Longitude out of range: {longitude}")
-        start = TrackPoint(latitude, longitude, first_point.timestamp)
+        start = TrackPoint(latitude, longitude, first_point.timestamp, first_point.elevation)
 
     previous = first_point
     cumulative_meters = 0.0
+    cumulative_elevation = 0.0
     last_lap_meters = 0.0
     last_lap_time = first_point.timestamp
     last_timestamp = first_point.timestamp
@@ -221,16 +234,30 @@ def measure_laps_with_routes(
             raise ValueError("Track point timestamps must be in chronological order.")
         lap_route.append(point)
         cumulative_meters += distance_meters(previous, point)
+        point_elevation = elevation_meters(previous, point)
+        cumulative_elevation += point_elevation
         distance_from_start = distance_meters(start, point)
 
         if distance_from_start > radius_meters:
             has_left_start = True
+            lap_points = 1
+            lap_error_points = 0
+            lap_elevation = 0.0
         elif has_left_start:
             lap_number += 1
+            lap_points += 1
             lap_meters = cumulative_meters - last_lap_meters
+            lap_elevation += point_elevation
+            lap_error_points += 1 if abs(point_elevation) > ELEVATION_TOLERANCE_METERS else 0
+            lap_points_error_rate = lap_error_points / lap_points * 100 if lap_points else 0
+            is_valid_lap = lap_points_error_rate < NUMBER_OF_POINTS_ERROR_THRESHOLD
+            if not is_valid_lap:
+                lap_elevation = 0.0
+                cumulative_elevation = 0.0
             elapsed_seconds = (point.timestamp - last_lap_time).total_seconds()
             total_seconds = (point.timestamp - start.timestamp).total_seconds()
             lap_miles = lap_meters / METERS_PER_MILE
+            elevation_feet = lap_elevation * FEET_PER_METER
             pace = elapsed_seconds / 60 / lap_miles if lap_miles else None
             laps_with_routes.append(
                 (
@@ -238,6 +265,8 @@ def measure_laps_with_routes(
                         number=lap_number,
                         distance_miles=lap_miles,
                         total_distance_miles=cumulative_meters / METERS_PER_MILE,
+                        elevation_gain=elevation_feet,
+                        total_elevation_gain=cumulative_elevation * FEET_PER_METER,
                         elapsed_seconds=elapsed_seconds,
                         total_seconds=total_seconds,
                         pace_minutes_per_mile=pace,
@@ -271,6 +300,8 @@ def write_laps_csv(path: Path, laps: Iterable[Lap]) -> None:
                 "lap",
                 "lap_distance_miles",
                 "total_distance_miles",
+                "lap_elevation_gain",
+                "total_elevation_gain",
                 "lap_time",
                 "total_time",
                 "lap_pace_minutes_per_mile",
@@ -282,14 +313,16 @@ def write_laps_csv(path: Path, laps: Iterable[Lap]) -> None:
                     lap.number,
                     f"{lap.distance_miles:.3f}",
                     f"{lap.total_distance_miles:.3f}",
+                    f"{lap.elevation_gain:.0f}",
+                    f"{lap.total_elevation_gain:.0f}",
                     _format_duration(lap.elapsed_seconds),
                     _format_duration(lap.total_seconds),
                     ""
                     if lap.pace_minutes_per_mile is None
                     else f"{lap.pace_minutes_per_mile:.2f}",
+                    f"{lap.total_elevation_gain:.2f}",
                 )
             )
-
 
 def _parse_datetime(value: str) -> datetime:
     try:

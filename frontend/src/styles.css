@@ -680,7 +680,7 @@ button {
 .lap-list-header,
 .lap-row {
   display: grid;
-  grid-template-columns: 52px 44px minmax(76px, 1fr) minmax(58px, 0.8fr) minmax(68px, 0.9fr);
+  grid-template-columns: 48px 40px minmax(58px, 1fr) minmax(40px, 0.8fr) minmax(58px, 1fr) minmax(68px, 1.6fr);
   align-items: center;
   gap: 4px;
   padding: 0 12px;

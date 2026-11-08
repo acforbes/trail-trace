@@ -62,6 +62,8 @@ class Lap(BaseModel):
     number: int
     distance_miles: float
     total_distance_miles: float
+    elevation_gain: float | None
+    total_elevation_gain: float | None
     elapsed_seconds: float
     total_seconds: float
     pace_minutes_per_mile: float | None

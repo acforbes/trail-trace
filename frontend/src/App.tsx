@@ -31,6 +31,8 @@ type Lap = {
   number: number;
   distance_miles: number;
   total_distance_miles: number;
+  elevation_gain: number;
+  total_elevation_gain: number;
   elapsed_seconds: number;
   total_seconds: number;
   pace_minutes_per_mile: number | null;
@@ -283,6 +285,8 @@ function App() {
       "lap",
       "lap_distance_miles",
       "total_distance_miles",
+      "lap_elevation_gain",
+      "total_elevation_gain",
       "lap_time",
       "total_time",
       "lap_pace_minutes_per_mile",
@@ -291,6 +295,8 @@ function App() {
       lap.number,
       lap.distance_miles.toFixed(3),
       lap.total_distance_miles.toFixed(3),
+      lap.elevation_gain.toFixed(0),
+      lap.total_elevation_gain.toFixed(0),
       formatDuration(lap.elapsed_seconds),
       formatDuration(lap.total_seconds),
       lap.pace_minutes_per_mile?.toFixed(2) ?? "",
@@ -616,6 +622,20 @@ function App() {
                 </span>
               </div>
               <div className="topbar-stat">
+                <Gauge size={16} />
+                <span>
+                {(result.laps[
+                  result.laps.length - 1
+                ].total_elevation_gain ?? 0).toFixed(0)}{" "}
+                ft (
+                  {(
+                  (result.laps[result.laps.length - 1].total_elevation_gain ?? 0) /
+                  result.laps.length
+                ).toFixed(0)}{" "}
+                ft/lap)
+                </span>
+              </div>
+              <div className="topbar-stat">
                 <Timer size={16} />
                 <span>
                   {formatDuration(
@@ -779,7 +799,8 @@ function App() {
                         <span>ALL</span>
                       </label>
                       <span>LAP</span>
-                      <span>DISTANCE</span>
+                      <span>DIST</span>
+                      <span>ELEV</span>
                       <span>TIME</span>
                       <span>PACE</span>
                     </div>
@@ -806,6 +827,10 @@ function App() {
                           <span className="lap-data">
                             <strong>{lap.distance_miles.toFixed(2)}</strong>
                             <small>mi</small>
+                          </span>
+                          <span className="lap-data">
+                            <strong>{(lap.elevation_gain ?? 0).toFixed(0)}</strong>
+                            <small>ft</small>
                           </span>
                           <span className="lap-data">
                             <strong>{formatDuration(lap.elapsed_seconds)}</strong>
