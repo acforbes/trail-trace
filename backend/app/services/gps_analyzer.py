@@ -14,14 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
-
-
-EARTH_RADIUS_METERS = 6_371_000
-METERS_PER_MILE = 1609.344
-FEET_PER_METER = 3.28084
-DEFAULT_RADIUS_METERS = 20.0
-ELEVATION_TOLERANCE_METERS = 3.0
-NUMBER_OF_POINTS_ERROR_THRESHOLD = 5 # percentage of total points beyond tolerance
+from app.core import constants
 
 @dataclass(frozen=True)
 class TrackPoint:
@@ -29,7 +22,6 @@ class TrackPoint:
     longitude: float
     timestamp: datetime
     elevation: float | None
-
 
 @dataclass(frozen=True)
 class Lap:
@@ -42,17 +34,14 @@ class Lap:
     total_seconds: float
     pace_minutes_per_mile: float | None
 
-
 def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
-
 
 def _child_text(element: ET.Element, name: str) -> str | None:
     for child in element:
         if _local_name(child.tag) == name:
             return child.text
     return None
-
 
 def _parse_point(latitude: str, longitude: str, timestamp: str | None, elevation: str | None) -> TrackPoint:
     if timestamp is None:
@@ -70,7 +59,6 @@ def _parse_point(latitude: str, longitude: str, timestamp: str | None, elevation
         raise ValueError(f"Longitude out of range: {longitude}")
     return TrackPoint(lat, lon, time, ele)
 
-
 def _parse_gpx_point(element: ET.Element, timestamp: str) -> TrackPoint:
     latitude = element.get("lat")
     longitude = element.get("lon")
@@ -79,7 +67,6 @@ def _parse_gpx_point(element: ET.Element, timestamp: str) -> TrackPoint:
         print(f"GPX: Missing Latitude/Longitude {element}")
         raise ValueError("A GPX track point is missing latitude or longitude.")
     return _parse_point(latitude, longitude, timestamp, elevation)
-
 
 def _parse_tcx_point(element: ET.Element, timestamp: str) -> TrackPoint | None:
     position = next(
@@ -96,7 +83,6 @@ def _parse_tcx_point(element: ET.Element, timestamp: str) -> TrackPoint | None:
         print(f"TCX: Missing Latitude/Longitude {element}")
         raise ValueError("A TCX track point is missing latitude or longitude.")
     return _parse_point(latitude, longitude, timestamp, elevation)
-
 
 def load_track(path: Path, start_time: datetime | None = None) -> list[TrackPoint]:
     """Load ordered track points from a GPX or TCX file."""
@@ -167,7 +153,7 @@ def distance_meters(first: TrackPoint, second: TrackPoint) -> float:
         math.sin(delta_lat / 2) ** 2
         + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
     )
-    return 2 * EARTH_RADIUS_METERS * math.asin(math.sqrt(min(1.0, haversine)))
+    return 2 * constants.EARTH_RADIUS_METERS * math.asin(math.sqrt(min(1.0, haversine)))
 
 def elevation_meters(first: TrackPoint, second: TrackPoint) -> float:
     """Return the elevation difference between two GPS points."""
@@ -177,7 +163,7 @@ def elevation_meters(first: TrackPoint, second: TrackPoint) -> float:
 
 def measure_laps(
     points: Iterable[TrackPoint],
-    radius_meters: float = DEFAULT_RADIUS_METERS,
+    radius_meters: float = constants.DEFAULT_RADIUS_METERS,
     start_location: tuple[float, float] | None = None,
 ) -> list[Lap]:
     """Measure completed laps on each return within the start-point radius."""
@@ -190,10 +176,9 @@ def measure_laps(
         )
     ]
 
-
 def measure_laps_with_routes(
     points: Iterable[TrackPoint],
-    radius_meters: float = DEFAULT_RADIUS_METERS,
+    radius_meters: float = constants.DEFAULT_RADIUS_METERS,
     start_location: tuple[float, float] | None = None,
 ) -> list[tuple[Lap, list[TrackPoint]]]:
     """Measure completed laps on each return within the start-point radius."""
@@ -248,25 +233,25 @@ def measure_laps_with_routes(
             lap_points += 1
             lap_meters = cumulative_meters - last_lap_meters
             lap_elevation += point_elevation
-            lap_error_points += 1 if abs(point_elevation) > ELEVATION_TOLERANCE_METERS else 0
+            lap_error_points += 1 if abs(point_elevation) > constants.ELEVATION_TOLERANCE_METERS else 0
             lap_points_error_rate = lap_error_points / lap_points * 100 if lap_points else 0
-            is_valid_lap = lap_points_error_rate < NUMBER_OF_POINTS_ERROR_THRESHOLD
+            is_valid_lap = lap_points_error_rate < constants.NUMBER_OF_POINTS_ERROR_THRESHOLD
             if not is_valid_lap:
                 lap_elevation = 0.0
                 cumulative_elevation = 0.0
             elapsed_seconds = (point.timestamp - last_lap_time).total_seconds()
             total_seconds = (point.timestamp - start.timestamp).total_seconds()
-            lap_miles = lap_meters / METERS_PER_MILE
-            elevation_feet = lap_elevation * FEET_PER_METER
+            lap_miles = lap_meters / constants.METERS_PER_MILE
+            elevation_feet = lap_elevation * constants.FEET_PER_METER
             pace = elapsed_seconds / 60 / lap_miles if lap_miles else None
             laps_with_routes.append(
                 (
                     Lap(
                         number=lap_number,
                         distance_miles=lap_miles,
-                        total_distance_miles=cumulative_meters / METERS_PER_MILE,
+                        total_distance_miles=cumulative_meters / constants.METERS_PER_MILE,
                         elevation_gain=elevation_feet,
-                        total_elevation_gain=cumulative_elevation * FEET_PER_METER,
+                        total_elevation_gain=cumulative_elevation * constants.FEET_PER_METER,
                         elapsed_seconds=elapsed_seconds,
                         total_seconds=total_seconds,
                         pace_minutes_per_mile=pace,
@@ -284,13 +269,11 @@ def measure_laps_with_routes(
 
     return laps_with_routes
 
-
 def _format_duration(seconds: float) -> str:
     total_seconds = int(round(seconds))
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-
 
 def write_laps_csv(path: Path, laps: Iterable[Lap]) -> None:
     with path.open("w", newline="", encoding="utf-8") as output:
@@ -332,7 +315,6 @@ def _parse_datetime(value: str) -> datetime:
             "Start time must be an ISO 8601 datetime (for example, 2024-01-01T12:00:00Z)."
         ) from exc
 
-
 def main(start_time: datetime | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Create a lap-by-lap CSV from a GPX or TCX GPS track."
@@ -347,8 +329,8 @@ def main(start_time: datetime | None = None) -> None:
     parser.add_argument(
         "--radius-meters",
         type=float,
-        default=DEFAULT_RADIUS_METERS,
-        help=f"Distance from the first point that counts as a pass (default: {DEFAULT_RADIUS_METERS:g})",
+        default=constants.DEFAULT_RADIUS_METERS,
+        help=f"Distance from the first point that counts as a pass (default: {constants.DEFAULT_RADIUS_METERS:g})",
     )
     parser.add_argument(
         "--start-time",
@@ -370,7 +352,6 @@ def main(start_time: datetime | None = None) -> None:
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(f"Wrote {len(laps)} laps to {output_path}")
-
 
 if __name__ == "__main__":
     main()

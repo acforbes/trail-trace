@@ -15,7 +15,7 @@ services:
       - ./backend/app:/code/app  # Live reload backend changes
     restart: unless-stopped
     # Override the production Cloud Run command for local development:
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
   # frontend:
   #   image: node:20-slim        # Uses a standard, official Node image

@@ -75,4 +75,4 @@ jobs:
           --max-instances=2
           --cpu-boost
         env_vars: |
-            ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}
+            ALLOWED_ORIGINS="${{ vars.ALLOWED_ORIGINS }}"
