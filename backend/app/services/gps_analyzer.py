@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
+from operator import length_hint
 from app.core import constants
 
 @dataclass(frozen=True)
@@ -176,6 +177,163 @@ def measure_laps(
         )
     ]
 
+def measure_laps_with_routes_by_circuit(
+    points: Iterable[TrackPoint],
+    radius_meters: float = constants.DEFAULT_RADIUS_METERS,
+    first_point: tuple[float, float] | None = None,
+    start: tuple[float, float] | None = None,
+) -> list[tuple[Lap, list[TrackPoint]]]:
+    """Measure completed laps on each return within the start-point radius."""
+    laps_with_routes: list[tuple[Lap, list[TrackPoint]]] = []
+    lap_route = [first_point]
+    previous = first_point
+    cumulative_meters = 0.0
+    cumulative_elevation_meters = 0.0
+    last_lap_meters = 0.0
+    last_lap_time = first_point.timestamp
+    last_timestamp = first_point.timestamp
+    lap_number = 0
+    has_left_start = distance_meters(start, first_point) > radius_meters
+
+    for point in points:
+        if (point.timestamp.utcoffset() is None) != (last_timestamp.utcoffset() is None):
+            raise ValueError("Track timestamps must consistently include a timezone.")
+        if point.timestamp < last_timestamp:
+            raise ValueError("Track point timestamps must be in chronological order.")
+        lap_route.append(point)
+        cumulative_meters += distance_meters(previous, point)
+        point_elevation_meters = elevation_meters(previous, point)
+        cumulative_elevation_meters += point_elevation_meters
+        distance_from_start = distance_meters(start, point)
+
+        if distance_from_start > radius_meters:
+            has_left_start = True
+            lap_points = 1
+            lap_error_points = 0
+            lap_elevation_meters = 0.0
+        elif has_left_start:
+            lap_number += 1
+            lap_points += 1
+            lap_meters = cumulative_meters - last_lap_meters
+            lap_elevation_meters += point_elevation_meters
+            lap_error_points += 1 if abs(point_elevation_meters) > constants.ELEVATION_TOLERANCE_METERS else 0
+            lap_points_error_rate = lap_error_points / lap_points * 100 if lap_points else 0
+            is_valid_lap = lap_points_error_rate < constants.NUMBER_OF_POINTS_ERROR_THRESHOLD
+            if not is_valid_lap:
+                lap_elevation_meters = 0.0
+                cumulative_elevation_meters = 0.0
+            elapsed_seconds = (point.timestamp - last_lap_time).total_seconds()
+            total_seconds = (point.timestamp - start.timestamp).total_seconds()
+            lap_miles = lap_meters / constants.METERS_PER_MILE
+            elevation_feet = lap_elevation_meters * constants.FEET_PER_METER
+            pace = elapsed_seconds / 60 / lap_miles if lap_miles else None
+            laps_with_routes.append(
+                (
+                    Lap(
+                        number=lap_number,
+                        distance_miles=lap_miles,
+                        total_distance_miles=cumulative_meters / constants.METERS_PER_MILE,
+                        elevation_gain=elevation_feet,
+                        total_elevation_gain=cumulative_elevation_meters * constants.FEET_PER_METER,
+                        elapsed_seconds=elapsed_seconds,
+                        total_seconds=total_seconds,
+                        pace_minutes_per_mile=pace,
+                    ),
+                    lap_route,
+                )
+            )
+            lap_route = [point]
+            last_lap_meters = cumulative_meters
+            last_lap_time = point.timestamp
+            has_left_start = False
+
+        previous = point
+        last_timestamp = point.timestamp
+
+    return laps_with_routes
+
+def measure_laps_with_routes_by_distance(
+    points: Iterable[TrackPoint],
+    radius_meters: float = constants.DEFAULT_RADIUS_METERS,
+    first_point: tuple[float, float] | None = None,
+    start: tuple[float, float] | None = None,
+) -> list[tuple[Lap, list[TrackPoint]]]:
+    """Measure completed laps on each return within the start-point radius."""
+    laps_with_routes: list[tuple[Lap, list[TrackPoint]]] = []
+    lap_route = [first_point]
+    previous = first_point
+    lap_number = 1
+    lap_points = 0
+    lap_meters = 0.0
+    cumulative_meters = 0.0
+    lap_elevation_meters = 0.0
+    cumulative_elevation_meters = 0.0
+    lap_error_points = 0
+    last_lap_time = first_point.timestamp
+    last_timestamp = first_point.timestamp
+
+    for point in points:
+        if (point.timestamp.utcoffset() is None) != (last_timestamp.utcoffset() is None):
+            raise ValueError("Track timestamps must consistently include a timezone.")
+        if point.timestamp < last_timestamp:
+            raise ValueError("Track point timestamps must be in chronological order.")
+
+        lap_route.append(point)
+        lap_points += 1
+
+        point_meters = distance_meters(previous, point)
+        lap_meters += point_meters
+        cumulative_meters += point_meters
+
+        point_elevation_meters = elevation_meters(previous, point)
+        lap_elevation_meters += point_elevation_meters
+        cumulative_elevation_meters += point_elevation_meters
+
+        lap_error_points += 1 if abs(point_elevation_meters) > constants.ELEVATION_TOLERANCE_METERS else 0
+
+        last_timestamp = point.timestamp
+        total_seconds = (point.timestamp - start.timestamp).total_seconds()
+
+        if lap_meters > constants.METERS_PER_MILE or length_hint(points) == 0:
+            # Process the completed lap once it crosses the mile threshold
+            lap_points_error_rate = lap_error_points / lap_points * 100 if lap_points else 0
+            is_valid_lap = lap_points_error_rate < constants.NUMBER_OF_POINTS_ERROR_THRESHOLD
+            if not is_valid_lap:
+                lap_elevation_meters = 0.0
+
+            lap_miles = lap_meters / constants.METERS_PER_MILE
+            lap_elapsed_seconds = (point.timestamp - last_lap_time).total_seconds()
+            lap_elevation_feet = lap_elevation_meters * constants.FEET_PER_METER
+            lap_pace = lap_elapsed_seconds / 60 / lap_miles if lap_miles else None
+            laps_with_routes.append(
+                (
+                    Lap(
+                        number=lap_number,
+                        distance_miles=lap_miles,
+                        total_distance_miles=cumulative_meters / constants.METERS_PER_MILE,
+                        elevation_gain=lap_elevation_feet,
+                        total_elevation_gain=cumulative_elevation_meters * constants.FEET_PER_METER,
+                        elapsed_seconds=lap_elapsed_seconds,
+                        total_seconds=total_seconds,
+                        pace_minutes_per_mile=lap_pace,
+                    ),
+                    lap_route,
+                )
+            )
+
+            # Reset lap metrics for the next lap
+            lap_number += 1
+            lap_points = 0
+            lap_meters = 0.0
+            lap_error_points = 0
+            lap_elevation_meters = 0.0
+            last_lap_time = point.timestamp
+            lap_route = [point]
+
+        previous = point
+
+    return laps_with_routes
+
 def measure_laps_with_routes(
     points: Iterable[TrackPoint],
     radius_meters: float = constants.DEFAULT_RADIUS_METERS,
@@ -186,6 +344,7 @@ def measure_laps_with_routes(
         raise ValueError("The start-point radius must be a positive number.")
 
     iterator = iter(points)
+
     try:
         first_point = next(iterator)
     except StopIteration as exc:
@@ -201,71 +360,21 @@ def measure_laps_with_routes(
             raise ValueError(f"Longitude out of range: {longitude}")
         start = TrackPoint(latitude, longitude, first_point.timestamp, first_point.elevation)
 
-    previous = first_point
-    cumulative_meters = 0.0
-    cumulative_elevation = 0.0
-    last_lap_meters = 0.0
-    last_lap_time = first_point.timestamp
-    last_timestamp = first_point.timestamp
-    lap_number = 0
-    has_left_start = distance_meters(start, first_point) > radius_meters
-    laps_with_routes: list[tuple[Lap, list[TrackPoint]]] = []
-    lap_route = [first_point]
+    laps_with_routes = measure_laps_with_routes_by_circuit(
+        points=iterator,
+        radius_meters=radius_meters,
+        first_point=first_point,
+        start=start,
+    )
 
-    for point in iterator:
-        if (point.timestamp.utcoffset() is None) != (last_timestamp.utcoffset() is None):
-            raise ValueError("Track timestamps must consistently include a timezone.")
-        if point.timestamp < last_timestamp:
-            raise ValueError("Track point timestamps must be in chronological order.")
-        lap_route.append(point)
-        cumulative_meters += distance_meters(previous, point)
-        point_elevation = elevation_meters(previous, point)
-        cumulative_elevation += point_elevation
-        distance_from_start = distance_meters(start, point)
-
-        if distance_from_start > radius_meters:
-            has_left_start = True
-            lap_points = 1
-            lap_error_points = 0
-            lap_elevation = 0.0
-        elif has_left_start:
-            lap_number += 1
-            lap_points += 1
-            lap_meters = cumulative_meters - last_lap_meters
-            lap_elevation += point_elevation
-            lap_error_points += 1 if abs(point_elevation) > constants.ELEVATION_TOLERANCE_METERS else 0
-            lap_points_error_rate = lap_error_points / lap_points * 100 if lap_points else 0
-            is_valid_lap = lap_points_error_rate < constants.NUMBER_OF_POINTS_ERROR_THRESHOLD
-            if not is_valid_lap:
-                lap_elevation = 0.0
-                cumulative_elevation = 0.0
-            elapsed_seconds = (point.timestamp - last_lap_time).total_seconds()
-            total_seconds = (point.timestamp - start.timestamp).total_seconds()
-            lap_miles = lap_meters / constants.METERS_PER_MILE
-            elevation_feet = lap_elevation * constants.FEET_PER_METER
-            pace = elapsed_seconds / 60 / lap_miles if lap_miles else None
-            laps_with_routes.append(
-                (
-                    Lap(
-                        number=lap_number,
-                        distance_miles=lap_miles,
-                        total_distance_miles=cumulative_meters / constants.METERS_PER_MILE,
-                        elevation_gain=elevation_feet,
-                        total_elevation_gain=cumulative_elevation * constants.FEET_PER_METER,
-                        elapsed_seconds=elapsed_seconds,
-                        total_seconds=total_seconds,
-                        pace_minutes_per_mile=pace,
-                    ),
-                    lap_route,
-                )
-            )
-            lap_route = [point]
-            last_lap_meters = cumulative_meters
-            last_lap_time = point.timestamp
-            has_left_start = False
-
-        previous = point
-        last_timestamp = point.timestamp
+    if len(laps_with_routes) < 3:
+        iterator = iter(points)
+        laps_with_routes = measure_laps_with_routes_by_distance(
+            points=iterator,
+            radius_meters=radius_meters,
+            first_point=first_point,
+            start=start,
+        )
 
     return laps_with_routes
 
